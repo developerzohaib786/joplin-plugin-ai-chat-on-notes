@@ -85,4 +85,4 @@ Type `@` directly in the message followed by part of the note title (e.g. `@proj
 
 ## License
 
-MIT © Zohaib Irshad
+MIT © [Zohaib Irshad](https://github.com/developerzohaib786)
