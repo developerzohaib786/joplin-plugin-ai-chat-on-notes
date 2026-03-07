@@ -38,7 +38,7 @@ body {
     padding: 8px 12px;
     border: none;
     background: transparent;
-    color: var(--joplin-color, #555);
+    color: var(--joplin-color, white);
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
@@ -55,9 +55,9 @@ body {
 }
 
 .tab-btn.active {
-    color: var(--joplin-color-highlight, #1d72b8);
+    color: var(--joplin-color-highlight, #333);
     border-bottom-color: var(--joplin-color-highlight, #1d72b8);
-    background: var(--joplin-background-color, #fff);
+    background: var(--joplin-background-color, #1d72b8) !important;
 }
 
 .tab-icon {
@@ -128,6 +128,7 @@ body {
 .welcome-msg p {
     margin-bottom: 6px;
     line-height: 1.5;
+    color: #333;
 }
 
 .welcome-sub {
@@ -188,10 +189,15 @@ body {
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 8px;
     border-top: 1px solid var(--joplin-divider-color, #ddd);
     background: var(--joplin-background-color, #fff);
     z-index: 100;
+}
+
+/* Inner wrapper provides a positioned ancestor for the picker dropdown */
+.chat-footer-inner {
+    position: relative;
+    padding: 8px;
 }
 
 .chat-input-row {
@@ -255,6 +261,24 @@ body {
     margin-top: 4px;
     min-height: 16px;
     color: var(--joplin-color2, #777);
+}
+
+.form-label {
+    font-size: 13px;
+    color: var(--joplin-color, #000);
+    white-space: nowrap;
+}
+
+.api-status-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    min-height: 20px;
+}
+
+.api-status-row .status-bar {
+    margin-top: 0;
 }
 
 .status-error {
@@ -367,6 +391,12 @@ hr {
 .settings-info h3 {
     font-size: 13px;
     margin-bottom: 8px;
+    color: #333;
+}
+
+.security-list {
+    color: #333 !important;
+    font-size: 12px !important;
 }
 
 .settings-info ul {
@@ -378,4 +408,193 @@ hr {
     font-size: 12px;
     color: var(--joplin-color2, #777);
     line-height: 1.5;
+}
+
+/* ── Note attachment button ────────────────────────────────────────────────── */
+.attach-btn {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border: 1px solid var(--joplin-divider-color, #ccc);
+    border-radius: 8px;
+    background: var(--joplin-background-color2, #f5f5f5);
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+    padding: 0;
+}
+
+.attach-btn:hover {
+    background: var(--joplin-background-color-hover, rgba(0, 0, 0, 0.08));
+    border-color: var(--joplin-color-highlight, #1d72b8);
+}
+
+.attach-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ── Attached note chips ───────────────────────────────────────────────────── */
+.attached-notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding-bottom: 6px;
+}
+
+.attached-notes:empty {
+    display: none;
+}
+
+.note-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px 3px 6px;
+    background: var(--joplin-color-highlight2, #ddeeff);
+    border: 1px solid var(--joplin-color-highlight, #1d72b8);
+    border-radius: 12px;
+    font-size: 11px;
+    color: var(--joplin-color-highlight, #1d72b8);
+    max-width: 200px;
+}
+
+.chip-title {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+.chip-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.chip-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: var(--joplin-color-highlight, #1d72b8);
+    opacity: 0.7;
+    margin-left: 2px;
+    flex-shrink: 0;
+}
+
+.chip-remove:hover {
+    opacity: 1;
+}
+
+/* ── Note picker dropdown ──────────────────────────────────────────────────── */
+.note-picker {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    display: flex;
+    flex-direction: column;
+    background: var(--joplin-background-color, #fff);
+    border: 1px solid var(--joplin-divider-color, #ccc);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    z-index: 200;
+}
+
+.note-picker-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px 6px;
+    border-bottom: 1px solid var(--joplin-divider-color, #eee);
+    flex-shrink: 0;
+}
+
+.note-picker-icon {
+    font-size: 13px;
+    opacity: 0.6;
+}
+
+#note-picker-search {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 12px;
+    background: transparent;
+    color: var(--joplin-color, #333);
+    font-family: inherit;
+}
+
+.note-picker-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+    padding: 4px 0;
+    margin: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--joplin-divider-color, #bbb) transparent;
+}
+
+.note-picker-item {
+    padding: 7px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--joplin-color, #333);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    outline: none;
+}
+
+.note-picker-item:hover,
+.note-picker-item:focus {
+    background: var(--joplin-background-color-hover, rgba(29, 114, 184, 0.08));
+    color: var(--joplin-color-highlight, #1d72b8);
+}
+
+.note-picker-item mark {
+    background: transparent;
+    color: var(--joplin-color-highlight, #1d72b8);
+    font-weight: 700;
+}
+
+.picker-note-icon {
+    font-size: 11px;
+    margin-right: 2px;
+}
+
+.note-picker-empty {
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--joplin-color2, #999);
+    text-align: center;
+}
+
+/* ── Attached notes in message bubble ─────────────────────────────────────── */
+.msg-notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.msg-note-tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
 }

@@ -127,15 +127,30 @@ function getPanelHtml(): string {
       </div>
     </div>
     <div class="chat-footer">
-      <div class="chat-input-row">
-        <textarea
-          id="chat-input"
-          placeholder="Ask something about your notes… (Enter to send, Shift+Enter for new line)"
-          rows="2"
-        ></textarea>
-        <button id="send-btn" title="Send">&#9654;</button>
+      <div class="chat-footer-inner">
+        <!-- Note picker dropdown (floats above input) -->
+        <div id="note-picker" class="note-picker" style="display:none">
+          <div class="note-picker-search-wrap">
+            <span class="note-picker-icon">🔍</span>
+            <input type="text" id="note-picker-search" placeholder="Search notes…" autocomplete="off" />
+          </div>
+          <ul id="note-picker-list" class="note-picker-list"></ul>
+          <div id="note-picker-empty" class="note-picker-empty" style="display:none">No matching notes</div>
+        </div>
+        <!-- Attached note chips -->
+        <div id="attached-notes" class="attached-notes"></div>
+        <!-- Input row -->
+        <div class="chat-input-row">
+          <button id="attach-btn" class="attach-btn" title="Attach a note (or type @ in the message)">📎</button>
+          <textarea
+            id="chat-input"
+            placeholder="Ask something… (@ to mention a note, Enter to send)"
+            rows="2"
+          ></textarea>
+          <button id="send-btn" title="Send">&#9654;</button>
+        </div>
+        <div id="chat-status" class="status-bar"></div>
       </div>
-      <div id="chat-status" class="status-bar"></div>
     </div>
   </div>
 
@@ -162,15 +177,18 @@ function getPanelHtml(): string {
       </div>
 
       <button id="save-settings-btn" class="primary-btn">Save &amp; Encrypt</button>
-      <div id="settings-status" class="status-bar"></div>
+      <div class="api-status-row">
+        <span class="form-label">Cohere API Status:</span>
+        <div id="settings-status" class="status-bar"></div>
+      </div>
 
       <hr/>
       <div class="settings-info">
-        <h3>About encryption</h3>
+        <h3>About Security</h3>
         <ul>
-          <li>Your key is encrypted with <strong>AES-256-GCM</strong> before storage.</li>
-          <li>A random 96-bit IV is generated for every save.</li>
-          <li>The key is never stored in plain text.</li>
+          <li class="security-list">Your key is encrypted before storage.</li>
+          <li class="security-list">A random 96-bit IV is generated for every save.</li>
+          <li class="security-list">The key is never stored in plain text.</li>
         </ul>
       </div>
     </div>
@@ -232,6 +250,31 @@ joplin.plugins.register({
 				return { hasApiKey: !!(stored && stored.trim()) };
 			}
 
+			// ── get-notes-list ────────────────────────────────────────────────
+			if (msg.type === 'get-notes-list') {
+				try {
+					const allNotes: Array<{ id: string; title: string }> = [];
+					let page = 1;
+					let hasMore = true;
+					while (hasMore) {
+						const result = await joplin.data.get(['notes'], {
+							fields: ['id', 'title'],
+							limit: 100,
+							page: page,
+						});
+						const items: Array<{ id: string; title: string }> = result.items ?? [];
+						allNotes.push(...items);
+						hasMore = !!result.has_more;
+						page++;
+						if (page > 20) break; // safety cap: 2 000 notes max
+					}
+					return { ok: true, notes: allNotes };
+				} catch (e: any) {
+					console.error('AI Chat get-notes-list error:', e.message);
+					return { ok: false, notes: [], error: e.message };
+				}
+			}
+
 			// ── chat ──────────────────────────────────────────────────────────
 			if (msg.type === 'chat') {
 				const stored = await joplin.settings.value('encryptedCohereApiKey') as string;
@@ -246,18 +289,31 @@ joplin.plugins.register({
 					return { ok: false, error: `Could not decrypt API key: ${e.message}` };
 				}
 
-				// Fetch up to 30 notes (title + body) to build context
+				// Fetch notes to build context:
+				// If the user attached specific notes, load only those; otherwise load recent 30
 				let notesContext = '';
 				try {
-					const result = await joplin.data.get(['notes'], {
-						fields: ['title', 'body'],
-						limit: 30,
-					});
-					const items: Array<{ title: string; body: string }> = result.items ?? [];
-					if (items.length > 0) {
-						notesContext = items
-							.map((n) => `### ${n.title}\n${(n.body || '').substring(0, 2000)}`)
+					const attachedIds: string[] = msg.attachedNoteIds ?? [];
+					if (attachedIds.length > 0) {
+						const noteItems: Array<{ title: string; body: string }> = [];
+						for (const id of attachedIds) {
+							const note = await joplin.data.get(['notes', id], { fields: ['title', 'body'] });
+							noteItems.push(note);
+						}
+						notesContext = noteItems
+							.map((n) => `### ${n.title}\n${(n.body || '').substring(0, 4000)}`)
 							.join('\n\n---\n\n');
+					} else {
+						const result = await joplin.data.get(['notes'], {
+							fields: ['title', 'body'],
+							limit: 30,
+						});
+						const items: Array<{ title: string; body: string }> = result.items ?? [];
+						if (items.length > 0) {
+							notesContext = items
+								.map((n) => `### ${n.title}\n${(n.body || '').substring(0, 2000)}`)
+								.join('\n\n---\n\n');
+						}
 					}
 				} catch (e: any) {
 					// Non-fatal — continue without notes context
@@ -265,8 +321,11 @@ joplin.plugins.register({
 				}
 
 				// Build message array
+				const attachedIds: string[] = msg.attachedNoteIds ?? [];
 				const systemContent = notesContext
-					? `You are a helpful AI assistant. Answer the user's questions using the following Joplin notes as context.\n\n${notesContext}`
+					? attachedIds.length > 0
+						? `You are a helpful AI assistant. The user has attached the following specific Joplin notes for context. Answer based on these notes.\n\n${notesContext}`
+						: `You are a helpful AI assistant. Answer the user's questions using the following Joplin notes as context.\n\n${notesContext}`
 					: 'You are a helpful AI assistant. The user has no notes yet.';
 
 				// Conversation history comes from the webview
