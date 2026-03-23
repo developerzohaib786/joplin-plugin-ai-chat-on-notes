@@ -13,6 +13,6 @@
 	"screenshots": [],
 	"icons": {},
 	"promo_tile": {},
-	"_publish_hash": "sha256:e086ca603a6b0a7ddf4cb849927807c79cbf86c6f1f9e42e840d77d3352141f9",
-	"_publish_commit": "main:8a7d351976e4e2ed9c93ded474d12f7d62914063"
+	"_publish_hash": "sha256:eefe48d8410acd5eca0b5ace4d8826118b2b5a94362f37047c826b4ec24cb428",
+	"_publish_commit": "bug/dark-mode:81e7d62f540bf33f795baf6a0eef7eddda101f16"
 }

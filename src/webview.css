@@ -13,6 +13,14 @@ html {
     overflow: hidden;
 }
 
+:root {
+    --chat-accent: var(--joplin-color-highlight, #1d72b8);
+    --chat-danger: var(--joplin-color-error, #d14343);
+    --chat-success: var(--joplin-color-correct, #2f8f46);
+    --chat-danger-bg: rgba(209, 67, 67, 0.14);
+    --chat-danger-border: rgba(209, 67, 67, 0.36);
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 13px;
@@ -128,7 +136,7 @@ body {
 .welcome-msg p {
     margin-bottom: 6px;
     line-height: 1.5;
-    color: #333;
+    color: var(--joplin-color, #333);
 }
 
 .welcome-sub {
@@ -137,7 +145,7 @@ body {
 }
 
 .api-warning {
-    color: #c0392b;
+    color: var(--chat-danger);
     margin-top: 10px;
 }
 
@@ -165,7 +173,7 @@ body {
 }
 
 .msg-user .msg-bubble {
-    background: var(--joplin-color-highlight, #1d72b8);
+    background: var(--chat-accent);
     color: #fff;
     border-bottom-right-radius: 3px;
 }
@@ -177,9 +185,9 @@ body {
 }
 
 .bubble-error {
-    background: #fdecea !important;
-    color: #c0392b !important;
-    border: 1px solid #f5c6c6;
+    background: var(--chat-danger-bg) !important;
+    color: var(--chat-danger) !important;
+    border: 1px solid var(--chat-danger-border);
     border-bottom-left-radius: 3px;
 }
 
@@ -282,11 +290,11 @@ body {
 }
 
 .status-error {
-    color: #c0392b !important;
+    color: var(--chat-danger) !important;
 }
 
 .status-ok {
-    color: #27ae60 !important;
+    color: var(--chat-success) !important;
 }
 
 /* ── Settings tab ──────────────────────────────────────────────────────────── */
@@ -391,11 +399,11 @@ hr {
 .settings-info h3 {
     font-size: 13px;
     margin-bottom: 8px;
-    color: #333;
+    color: var(--joplin-color, #333);
 }
 
 .security-list {
-    color: #333 !important;
+    color: var(--joplin-color, #333) !important;
     font-size: 12px !important;
 }
 
