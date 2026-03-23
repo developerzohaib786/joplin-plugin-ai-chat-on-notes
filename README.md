@@ -10,7 +10,8 @@ An AI-powered chat panel for Joplin that lets you have a conversation with your 
 - **Attach specific notes:** Click the 📎 button or type `@` in the message box to pick and attach individual notes to a prompt, so the AI focuses only on what you choose.
 - **@ mention autocomplete:** Type `@` followed by any part of a note title to get an instant searchable dropdown. Select a note to pin it to the message.
 - **Conversation memory:** The assistant remembers the full back-and-forth within a session, so you can ask follow-up questions naturally.
-- **Secure API key storage:** Your Cohere API key is encrypted with **AES-256-GCM** (random 96-bit IV per save) before being stored, it is never kept in plain text.
+- **Multiple AI providers:** Choose between **Cohere** and **Google Gemini** in the Settings tab.
+- **Secure API key storage:** Your API keys are encrypted with **AES-256-GCM** (random 96-bit IV per save) before being stored, and are never kept in plain text.
 - **Theme aware:** Automatically adapts to your Joplin theme (Light, Dark, Dracula, etc.) using native CSS variables.
 - **Keyboard friendly:** Press `Enter` to send, `Shift+Enter` for a new line, and navigate the note picker entirely with the keyboard.
 
@@ -36,13 +37,13 @@ An AI-powered chat panel for Joplin that lets you have a conversation with your 
 
 ## Setup
 
-This plugin requires a free **Cohere API key** to work.
+This plugin supports **Cohere** and **Google Gemini**.
 
-1. Sign up or log in at [dashboard.cohere.com/api-keys](https://dashboard.cohere.com/api-keys).
-2. Create a new API key and copy it.
-3. In Joplin, open the **AI Note Assistant** panel and switch to the **⚙️ Settings** tab.
-4. Paste your key into the **API Key** field and click **Save & Encrypt**.
-5. The status row will confirm **API key is configured.**
+1. Create a key at [dashboard.cohere.com/api-keys](https://dashboard.cohere.com/api-keys) or [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. In Joplin, open the **AI Note Assistant** panel and switch to the **⚙️ Settings** tab.
+3. Select your provider (**Cohere** or **Gemini**).
+4. Paste your key and click **Save Provider & Key**.
+5. The status row will confirm when the selected provider key is configured.
 
 ---
 
@@ -75,7 +76,7 @@ Type `@` directly in the message followed by part of the note title (e.g. `@proj
 
 | Detail | Value |
 |--------|-------|
-| AI Model | Cohere `command-r-plus-08-2024` via the v2 Chat API |
+| AI Model | Cohere `command-r-plus-08-2024` or Gemini `gemini-1.5-flash` |
 | Encryption | AES-256-GCM, key derived with `scrypt`, random 96-bit IV per save |
 | Note fetching | Paginates through all notes (up to 2 000) for the picker; loads up to 30 notes as fallback context |
 | Context window | 4 000 chars per attached note, 2 000 chars per fallback note |

@@ -6,6 +6,9 @@
     // ── State ────────────────────────────────────────────────────────────────
     const chatHistory = []; // { role: 'user'|'assistant', content: string }
     let isBusy = false;
+    let currentProvider = 'cohere';
+    let hasCohereApiKey = false;
+    let hasGeminiApiKey = false;
     let apiKeySet = false;
     let allNotes = [];          // { id, title } – populated on init
     let attachedNotes = [];     // { id, title } – currently attached to the next message
@@ -17,7 +20,10 @@
     const chatInput = document.getElementById('chat-input');
     const sendBtn = document.getElementById('send-btn');
     const chatStatus = document.getElementById('chat-status');
+    const providerSelect = document.getElementById('provider-select');
     const apiKeyInput = document.getElementById('api-key-input');
+    const apiKeyInputLabel = document.getElementById('api-key-input-label');
+    const providerStatusLabel = document.getElementById('provider-status-label');
     const saveSettingsBtn = document.getElementById('save-settings-btn');
     const settingsStatus = document.getElementById('settings-status');
     const toggleVisBtn = document.getElementById('toggle-visibility-btn');
@@ -131,6 +137,31 @@
             lower.includes('access denied') ||
             lower.includes('invalid token') ||
             lower.includes('expired')
+        );
+    }
+
+    function getProviderLabel(provider) {
+        return provider === 'gemini' ? 'Gemini' : 'Cohere';
+    }
+
+    function refreshSelectedProviderState() {
+        apiKeySet = currentProvider === 'gemini' ? hasGeminiApiKey : hasCohereApiKey;
+    }
+
+    function updateProviderUi() {
+        const label = getProviderLabel(currentProvider);
+        providerSelect.value = currentProvider;
+        providerStatusLabel.textContent = label + ' API Status:';
+        apiKeyInputLabel.textContent = label + ' API Key';
+        apiKeyInput.placeholder = currentProvider === 'gemini' ? 'AIza...' : 'co-...';
+        refreshSelectedProviderState();
+        setStatus(
+            settingsStatus,
+            apiKeySet
+                ? '✅ ' + label + ' API key is configured.'
+                : '⚠️ No ' + label + ' API key set yet.',
+            !apiKeySet,
+            true
         );
     }
 
@@ -358,7 +389,7 @@
 
         // Guard: API key not set
         if (!apiKeySet) {
-            appendErrorBubble('⚠️ API key is not set. Please go to the Settings tab and save your Cohere API key first.');
+            appendErrorBubble('⚠️ API key is not set for ' + getProviderLabel(currentProvider) + '. Please go to the Settings tab and save it first.');
             return;
         }
 
@@ -375,6 +406,7 @@
         try {
             const response = await webviewApi.postMessage({
                 type: 'chat',
+                provider: currentProvider,
                 message: text,
                 history: chatHistory.slice(),
                 attachedNoteIds: currentAttached.map(function (n) { return n.id; }),
@@ -390,11 +422,11 @@
             } else {
                 const errMsg = (response && response.error) ? response.error : 'Unknown error.';
                 if (response && response.invalidApiKey) {
-                    appendErrorBubble('❌ API key is not valid. Please check your Cohere API key in the Settings tab.');
+                    appendErrorBubble('❌ API key is not valid. Please check your ' + getProviderLabel(currentProvider) + ' API key in the Settings tab.');
                 } else if (isInvalidKeyError(errMsg)) {
-                    appendErrorBubble('❌ API key is not valid. Please check your Cohere API key in the Settings tab.');
+                    appendErrorBubble('❌ API key is not valid. Please check your ' + getProviderLabel(currentProvider) + ' API key in the Settings tab.');
                 } else if (errMsg.toLowerCase().includes('no api key') || errMsg.toLowerCase().includes('not configured')) {
-                    appendErrorBubble('⚠️ API key is not set. Please go to the Settings tab and save your Cohere API key first.');
+                    appendErrorBubble('⚠️ API key is not set for ' + getProviderLabel(currentProvider) + '. Please go to the Settings tab and save it first.');
                     apiKeySet = false;
                 } else {
                     appendErrorBubble('❌ Error: ' + errMsg);
@@ -418,10 +450,6 @@
     // ── Save settings ────────────────────────────────────────────────────────
     saveSettingsBtn.addEventListener('click', async function () {
         const key = apiKeyInput.value.trim();
-        if (!key) {
-            setStatus(settingsStatus, 'API key cannot be empty.', true);
-            return;
-        }
 
         saveSettingsBtn.disabled = true;
         setStatus(settingsStatus, 'Saving…', false);
@@ -429,13 +457,18 @@
         try {
             const response = await webviewApi.postMessage({
                 type: 'save-settings',
+                provider: currentProvider,
                 apiKey: key,
             });
 
             if (response && response.ok) {
-                apiKeySet = true;
+                if (key) {
+                    if (currentProvider === 'gemini') hasGeminiApiKey = true;
+                    else hasCohereApiKey = true;
+                }
+                refreshSelectedProviderState();
                 apiKeyInput.value = '';
-                setStatus(settingsStatus, '✅ API key saved and encrypted successfully!', false, true);
+                setStatus(settingsStatus, '✅ ' + getProviderLabel(currentProvider) + ' settings saved successfully!', false, true);
             } else {
                 const errMsg = (response && response.error) ? response.error : 'Failed to save settings.';
                 setStatus(settingsStatus, '❌ ' + errMsg, true);
@@ -447,21 +480,32 @@
         }
     });
 
+    providerSelect.addEventListener('change', function () {
+        currentProvider = providerSelect.value === 'gemini' ? 'gemini' : 'cohere';
+        updateProviderUi();
+    });
+
     // ── Load initial state ───────────────────────────────────────────────────
     async function init() {
         try {
             const response = await webviewApi.postMessage({ type: 'load-settings' });
-            if (response && response.hasApiKey) {
-                apiKeySet = true;
-                setStatus(settingsStatus, '✅ API key is configured.', false, true);
+            if (response) {
+                currentProvider = response.provider === 'gemini' ? 'gemini' : 'cohere';
+                hasCohereApiKey = !!response.hasCohereApiKey;
+                hasGeminiApiKey = !!response.hasGeminiApiKey;
+                updateProviderUi();
             } else {
                 apiKeySet = false;
-                // Show a prompt in chat to configure the key
+                updateProviderUi();
+            }
+
+            // Show a prompt in chat to configure the selected provider key
+            if (!apiKeySet) {
                 const welcome = chatMessages.querySelector('.welcome-msg');
                 if (welcome) {
                     const notice = document.createElement('p');
                     notice.className = 'welcome-sub api-warning';
-                    notice.innerHTML = '⚠️ <strong>No API key set.</strong> Go to the <strong>Settings</strong> tab to add your Cohere API key.';
+                    notice.innerHTML = '⚠️ <strong>No API key set for ' + getProviderLabel(currentProvider) + '.</strong> Go to the <strong>Settings</strong> tab to add it.';
                     welcome.appendChild(notice);
                 }
             }

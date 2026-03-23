@@ -42,6 +42,8 @@ interface CohereMessage {
 	content: string;
 }
 
+type AiProvider = 'cohere' | 'gemini';
+
 function callCohere(apiKey: string, messages: CohereMessage[]): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const body = JSON.stringify({
@@ -96,6 +98,154 @@ function callCohere(apiKey: string, messages: CohereMessage[]): Promise<string> 
 	});
 }
 
+function callGeminiWithModel(apiKey: string, apiVersion: 'v1beta' | 'v1', model: string, systemContent: string, messages: CohereMessage[]): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const body = JSON.stringify({
+			systemInstruction: {
+				parts: [{ text: systemContent }],
+			},
+			contents: messages.map((m) => ({
+				role: m.role === 'assistant' ? 'model' : 'user',
+				parts: [{ text: m.content }],
+			})),
+		});
+
+		const options: https.RequestOptions = {
+			hostname: 'generativelanguage.googleapis.com',
+			path: `/${apiVersion}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Content-Length': Buffer.byteLength(body),
+			},
+		};
+
+		const req = https.request(options, (res) => {
+			let data = '';
+			res.on('data', (chunk) => { data += chunk; });
+			res.on('end', () => {
+				try {
+					if (res.statusCode === 401 || res.statusCode === 403) {
+						return reject(new Error('INVALID_API_KEY: The Gemini API key is invalid or unauthorized. Please check your key in the Settings tab.'));
+					}
+
+					const parsed = JSON.parse(data);
+					const parts = parsed?.candidates?.[0]?.content?.parts;
+					if (Array.isArray(parts)) {
+						const text = parts
+							.filter((p: any) => typeof p?.text === 'string')
+							.map((p: any) => p.text)
+							.join('\n')
+							.trim();
+						if (text) return resolve(text);
+					}
+
+					const rawErr: string = parsed?.error?.message ?? parsed?.message ?? JSON.stringify(parsed);
+					const lower = (typeof rawErr === 'string' ? rawErr : JSON.stringify(rawErr)).toLowerCase();
+					if (
+						lower.includes('api key') ||
+						lower.includes('unauthorized') ||
+						lower.includes('permission denied')
+					) {
+						return reject(new Error('INVALID_API_KEY: The Gemini API key is invalid. Please check your key in the Settings tab.'));
+					}
+					reject(new Error(`Gemini API error: ${rawErr}`));
+				} catch (e: any) {
+					reject(new Error(`Failed to parse Gemini response: ${e.message}`));
+				}
+			});
+		});
+
+		req.on('error', (e) => reject(new Error(`Network error: ${e.message}`)));
+		req.write(body);
+		req.end();
+	});
+}
+
+function listGeminiGenerateContentModels(apiKey: string, apiVersion: 'v1beta' | 'v1'): Promise<string[]> {
+	return new Promise((resolve, reject) => {
+		const options: https.RequestOptions = {
+			hostname: 'generativelanguage.googleapis.com',
+			path: `/${apiVersion}/models?key=${encodeURIComponent(apiKey)}`,
+			method: 'GET',
+		};
+
+		const req = https.request(options, (res) => {
+			let data = '';
+			res.on('data', (chunk) => { data += chunk; });
+			res.on('end', () => {
+				try {
+					if (res.statusCode === 401 || res.statusCode === 403) {
+						return reject(new Error('INVALID_API_KEY: The Gemini API key is invalid or unauthorized. Please check your key in the Settings tab.'));
+					}
+
+					const parsed = JSON.parse(data);
+					const models = Array.isArray(parsed?.models) ? parsed.models : [];
+					const names = models
+						.filter((m: any) => {
+							const methods = Array.isArray(m?.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
+							const name = String(m?.name || '').toLowerCase();
+							return methods.includes('generateContent') && name.includes('gemini');
+						})
+						.map((m: any) => String(m.name || ''))
+						.map((name: string) => name.startsWith('models/') ? name.substring('models/'.length) : name)
+						.filter((name: string) => !!name);
+
+					resolve(names);
+				} catch (e: any) {
+					reject(new Error(`Failed to parse Gemini model list: ${e.message}`));
+				}
+			});
+		});
+
+		req.on('error', (e) => reject(new Error(`Network error: ${e.message}`)));
+		req.end();
+	});
+}
+
+async function callGemini(apiKey: string, systemContent: string, messages: CohereMessage[]): Promise<string> {
+	const apiVersions: Array<'v1beta' | 'v1'> = ['v1beta', 'v1'];
+	const staticCandidates = [
+		'gemini-2.5-flash',
+		'gemini-2.0-flash',
+		'gemini-2.0-flash-lite',
+		'gemini-1.5-flash-latest',
+		'gemini-1.5-flash',
+		'gemini-pro',
+	];
+
+	let lastError: Error | null = null;
+
+	for (const apiVersion of apiVersions) {
+		let discovered: string[] = [];
+		try {
+			discovered = await listGeminiGenerateContentModels(apiKey, apiVersion);
+		} catch (e: any) {
+			const errMsg = String(e?.message || '');
+			if (errMsg.startsWith('INVALID_API_KEY:')) throw e;
+		}
+
+		const seen = new Set<string>();
+		const orderedCandidates = [...discovered, ...staticCandidates].filter((model) => {
+			if (!model || seen.has(model)) return false;
+			seen.add(model);
+			return true;
+		});
+
+		for (const model of orderedCandidates.slice(0, 16)) {
+			try {
+				return await callGeminiWithModel(apiKey, apiVersion, model, systemContent, messages);
+			} catch (e: any) {
+				const errMsg = String(e?.message || '');
+				if (errMsg.startsWith('INVALID_API_KEY:')) throw e;
+				lastError = new Error(`Model ${model} failed (${apiVersion}): ${errMsg}`);
+			}
+		}
+	}
+
+	throw new Error(lastError?.message || 'Gemini API error: no supported Gemini model is available for this API key/account.');
+}
+
 // ─── Panel HTML ───────────────────────────────────────────────────────────────
 function getPanelHtml(): string {
 	return /* html */ `
@@ -123,7 +273,7 @@ function getPanelHtml(): string {
       <div class="welcome-msg">
         <div class="welcome-icon">🤖</div>
         <p>Hello! I can answer questions based on your Joplin notes.</p>
-        <p class="welcome-sub">Make sure you've saved your Cohere API key in the <strong>Settings</strong> tab first.</p>
+	        <p class="welcome-sub">Make sure you've saved an API key for your selected provider in the <strong>Settings</strong> tab first.</p>
       </div>
     </div>
     <div class="chat-footer">
@@ -157,28 +307,38 @@ function getPanelHtml(): string {
   <!-- ── Settings Tab ── -->
   <div class="tab-content" id="tab-settings">
     <div class="settings-panel">
-      <h2>Cohere API Settings</h2>
+	      <h2>AI Provider Settings</h2>
       <p class="settings-desc">
-        Enter your personal <a href="https://dashboard.cohere.com/api-keys" target="_blank">Cohere API key</a>.
-        It is encrypted with AES-256-GCM before being stored.
+	        Choose your provider, then enter your API key.
+	        Get keys from <a href="https://dashboard.cohere.com/api-keys" target="_blank">Cohere</a> or
+	        <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio (Gemini)</a>.
+	        Keys are encrypted with AES-256-GCM before storage.
       </p>
 
+	      <div class="form-group">
+	        <label for="provider-select">Provider</label>
+	        <select id="provider-select">
+	          <option value="cohere">Cohere</option>
+	          <option value="gemini">Gemini</option>
+	        </select>
+	      </div>
+
       <div class="form-group">
-        <label for="api-key-input">API Key</label>
+	        <label for="api-key-input" id="api-key-input-label">API Key</label>
         <div class="input-row">
           <input
             type="password"
             id="api-key-input"
             autocomplete="off"
-            placeholder="sk-…"
+	            placeholder="Paste API key…"
           />
           <button id="toggle-visibility-btn" class="icon-btn" title="Show/hide key">👁</button>
         </div>
       </div>
 
-      <button id="save-settings-btn" class="primary-btn">Save &amp; Encrypt</button>
+	      <button id="save-settings-btn" class="primary-btn">Save Provider &amp; Key</button>
       <div class="api-status-row">
-        <span class="form-label">Cohere API Status:</span>
+	        <span class="form-label" id="provider-status-label">Provider Status:</span>
         <div id="settings-status" class="status-bar"></div>
       </div>
 
@@ -211,6 +371,14 @@ joplin.plugins.register({
 		});
 
 		await joplin.settings.registerSettings({
+			aiProvider: {
+				value: 'cohere',
+				type: SettingItemType.String,
+				section: 'aiChatSection',
+				public: false,
+				label: 'AI Provider',
+				description: 'Selected AI provider managed by the AI Chat plugin.',
+			},
 			encryptedCohereApiKey: {
 				value: '',
 				type: SettingItemType.String,
@@ -218,6 +386,14 @@ joplin.plugins.register({
 				public: false,                          // hidden from the standard settings UI
 				label: 'Encrypted Cohere API Key',
 				description: 'AES-256-GCM encrypted Cohere API key managed by the AI Chat plugin.',
+			},
+			encryptedGeminiApiKey: {
+				value: '',
+				type: SettingItemType.String,
+				section: 'aiChatSection',
+				public: false,
+				label: 'Encrypted Gemini API Key',
+				description: 'AES-256-GCM encrypted Gemini API key managed by the AI Chat plugin.',
 			},
 		});
 
@@ -233,11 +409,21 @@ joplin.plugins.register({
 			// ── save-settings ─────────────────────────────────────────────────
 			if (msg.type === 'save-settings') {
 				try {
-					if (!msg.apiKey || !msg.apiKey.trim()) {
-						return { ok: false, error: 'API key cannot be empty.' };
+					const provider: AiProvider = msg.provider === 'gemini' ? 'gemini' : 'cohere';
+					const settingKey = provider === 'gemini' ? 'encryptedGeminiApiKey' : 'encryptedCohereApiKey';
+					const rawKey = (msg.apiKey ?? '').trim();
+
+					if (rawKey) {
+						const encrypted = encryptApiKey(rawKey);
+						await joplin.settings.setValue(settingKey, encrypted);
+					} else {
+						const existing = await joplin.settings.value(settingKey) as string;
+						if (!existing || !existing.trim()) {
+							return { ok: false, error: `No ${provider === 'gemini' ? 'Gemini' : 'Cohere'} API key saved yet. Enter a key first.` };
+						}
 					}
-					const encrypted = encryptApiKey(msg.apiKey.trim());
-					await joplin.settings.setValue('encryptedCohereApiKey', encrypted);
+
+					await joplin.settings.setValue('aiProvider', provider);
 					return { ok: true };
 				} catch (e: any) {
 					return { ok: false, error: e.message };
@@ -246,8 +432,15 @@ joplin.plugins.register({
 
 			// ── load-settings ─────────────────────────────────────────────────
 			if (msg.type === 'load-settings') {
-				const stored = await joplin.settings.value('encryptedCohereApiKey') as string;
-				return { hasApiKey: !!(stored && stored.trim()) };
+				const providerRaw = await joplin.settings.value('aiProvider') as string;
+				const provider: AiProvider = providerRaw === 'gemini' ? 'gemini' : 'cohere';
+				const cohereStored = await joplin.settings.value('encryptedCohereApiKey') as string;
+				const geminiStored = await joplin.settings.value('encryptedGeminiApiKey') as string;
+				return {
+					provider,
+					hasCohereApiKey: !!(cohereStored && cohereStored.trim()),
+					hasGeminiApiKey: !!(geminiStored && geminiStored.trim()),
+				};
 			}
 
 			// ── get-notes-list ────────────────────────────────────────────────
@@ -277,9 +470,12 @@ joplin.plugins.register({
 
 			// ── chat ──────────────────────────────────────────────────────────
 			if (msg.type === 'chat') {
-				const stored = await joplin.settings.value('encryptedCohereApiKey') as string;
+				const providerRaw = (msg.provider ?? (await joplin.settings.value('aiProvider'))) as string;
+				const provider: AiProvider = providerRaw === 'gemini' ? 'gemini' : 'cohere';
+				const settingKey = provider === 'gemini' ? 'encryptedGeminiApiKey' : 'encryptedCohereApiKey';
+				const stored = await joplin.settings.value(settingKey) as string;
 				if (!stored || !stored.trim()) {
-					return { ok: false, error: 'No API key configured. Open the Settings tab to add your Cohere API key.' };
+					return { ok: false, error: `No API key configured for ${provider === 'gemini' ? 'Gemini' : 'Cohere'}. Open the Settings tab to add it.` };
 				}
 
 				let apiKey: string;
@@ -341,7 +537,9 @@ joplin.plugins.register({
 				];
 
 				try {
-					const reply = await callCohere(apiKey, messages);
+					const reply = provider === 'gemini'
+						? await callGemini(apiKey, systemContent, messages.filter((m) => m.role !== 'system'))
+						: await callCohere(apiKey, messages);
 					return { ok: true, reply };
 				} catch (e: any) {
 					const errMsg: string = e.message || 'Unknown error';
