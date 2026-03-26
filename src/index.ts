@@ -518,11 +518,11 @@ joplin.plugins.register({
 
 				// Build message array
 				const attachedIds: string[] = msg.attachedNoteIds ?? [];
-				const systemContent = notesContext
+				const systemContent = notesContext 
 					? attachedIds.length > 0
-						? `You are a helpful AI assistant. The user has attached the following specific Joplin notes for context. Answer based on these notes.\n\n${notesContext}`
-						: `You are a helpful AI assistant. Answer the user's questions using the following Joplin notes as context.\n\n${notesContext}`
-					: 'You are a helpful AI assistant. The user has no notes yet.';
+						?  `You are a helpful AI assistant. The user has attached the following specific Joplin notes for context. Answer based on these notes. Format your response in Markdown.\n\n${notesContext}`
+						: `You are a helpful AI assistant. Answer the user's questions using the following Joplin notes as context. Format your response in Markdown.\n\n${notesContext}`
+					: 'You are a helpful AI assistant. Format your response in Markdown.';
 
 				// Conversation history comes from the webview
 				const history: CohereMessage[] = (msg.history ?? []).map((h: any) => ({
