@@ -74,8 +74,27 @@
         }
     }
 
+    function renderMarkdown(md) {
+        // Minimal safe markdown rendering for common LLM output
+        const escaped = escapeHtml(md);
+
+        return escaped
+            // fenced code blocks
+            .replace(/```(\w+)?\n([\s\S]*?)```/g, function (_, lang, code) {
+                const cls = lang ? ' class="language-' + lang + '"' : '';
+                return '<pre><code' + cls + '>' + code + '</code></pre>';
+            })
+            // inline code
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            // bold
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            // italic
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            // line breaks
+            .replace(/\n/g, '<br>');
+    }
+
     function appendMessage(role, text, opts) {
-        // Remove welcome message on first real message
         const welcome = chatMessages.querySelector('.welcome-msg');
         if (welcome) welcome.remove();
 
@@ -85,11 +104,12 @@
         const bubble = document.createElement('div');
         bubble.className = 'msg-bubble';
 
-        const textSpan = document.createElement('span');
-        textSpan.textContent = text;
-        bubble.appendChild(textSpan);
+        if (role === 'assistant') {
+            bubble.innerHTML = renderMarkdown(text); // render markdown
+        } else {
+            bubble.textContent = text; // keep user message plain text
+        }
 
-        // Show which notes were attached (user messages only)
         if (opts && opts.notes && opts.notes.length > 0 && role === 'user') {
             const notesRow = document.createElement('div');
             notesRow.className = 'msg-notes';
